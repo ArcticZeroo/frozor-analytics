@@ -64,7 +64,7 @@ export const registerApiRoutes = (app: Koa) => {
         ctx.body = 'Application created successfully';
     });
 
-    router.put('/applications/:name/visits/:visitorId', async ctx => {
+    router.put('/applications/:name/visits/visitor/:visitorId', async ctx => {
         const applicationName = requireExistingApplicationName(ctx);
 
         const visitorId = ctx.params.visitorId;

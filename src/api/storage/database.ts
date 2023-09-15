@@ -104,7 +104,12 @@ export const performHourlyAggregationAsync = async () => {
     nearestHour.setHours(nearestHour.getHours() - 1);
     nearestHour.setMinutes(0);
 
+    console.log(`Aggregating for time: ${getDateString(nearestHour)}`);
+
     for (const application in applications) {
+        console.log('Aggregating for application: ', application);
         await performAggregationAsync(application, nearestHour);
     }
+
+    console.log('Aggregation complete!');
 };
