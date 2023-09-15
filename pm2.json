@@ -1,0 +1,11 @@
+{
+    "apps": [
+        {
+            "name": "Analytics",
+            "script": "npm",
+            "args": ["run", "start"],
+            "watch": false,
+            "ignore_watch": ["node_modules"]
+        }
+    ]
+}
