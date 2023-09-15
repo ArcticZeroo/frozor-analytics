@@ -27,10 +27,10 @@ const requireExistingApplicationName = (ctx: Context) => {
     return name;
 };
 
-const afterRegex = /\d{4}-\d{2}-\d{2} \d{2}:\d{2}/;
+const afterRegex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
 
 const requireAfterDate = (ctx: Context) => {
-    const after = ctx.query.since;
+    const after = ctx.query.after;
 
     if (!after) {
         return ctx.throw(400, 'Missing after date');
