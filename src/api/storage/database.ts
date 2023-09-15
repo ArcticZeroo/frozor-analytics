@@ -95,6 +95,9 @@ export const getAggregatedVisitsAsync = async (application: string, after: strin
 export const performAggregationAsync = async (application: string, time: Date) => {
     // TODO: Use a transaction here
     const count = await getVisitsAsync(application);
+    if (count === 0) {
+        return;
+    }
     await addAggregatedVisitsAsync(application, count, time);
     await clearVisitsAsync(application);
 }
