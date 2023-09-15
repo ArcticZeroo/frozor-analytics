@@ -3,5 +3,5 @@ const padTimeValue = (value: number): string => {
 }
 
 export const getDateString = (date: Date): string => {
-    return `${date.getUTCFullYear()}-${padTimeValue(date.getUTCMonth() + 1)}-${padTimeValue(date.getUTCDate())} ${padTimeValue(date.getUTCHours())}:${padTimeValue(date.getUTCMinutes())}`;
+    return `${date.getUTCFullYear()}-${padTimeValue(date.getUTCMonth() + 1)}-${padTimeValue(date.getUTCDate())}T${padTimeValue(date.getUTCHours())}:${padTimeValue(date.getUTCMinutes())}`;
 }
