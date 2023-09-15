@@ -106,7 +106,12 @@ export const performHourlyAggregationAsync = async () => {
 
     console.log(`Aggregating for time: ${getDateString(nearestHour)}`);
 
-    for (const application in applications) {
+    if (applications.size === 0) {
+        console.log('No applications to aggregate');
+        return;
+    }
+
+    for (const application of applications) {
         console.log('Aggregating for application: ', application);
         await performAggregationAsync(application, nearestHour);
     }
