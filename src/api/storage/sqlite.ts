@@ -33,4 +33,10 @@ await db.run(`
     )
 `);
 
+console.log('Clearing old visits...');
+
+await db.run(`
+    DELETE FROM visit
+`);
+
 console.log('Database is ready!');
