@@ -1,7 +1,7 @@
 import { db } from './sqlite.js';
 import { isDuckType } from '@arcticzeroo/typeguard';
 import { IAggregatedVisits, IApplication } from '../../models/analytics.js';
-import { getDateString } from '../../util/date.js';
+import { getDateString, normalizeDate } from '../../util/date.js';
 
 export const getApplicationsAsync = async () => {
     const rows = await db.all('SELECT name FROM application');
@@ -68,13 +68,16 @@ export const addAggregatedVisitsAsync = async (application: string, count: numbe
     }
 }
 
-export const getAggregatedVisitsAsync = async (application: string, after: string): Promise<Array<IAggregatedVisits>> => {
+export const getAggregatedVisitsAsync = async (application: string, daysAgo: number): Promise<Array<IAggregatedVisits>> => {
+    const minDate = normalizeDate(new Date());
+    minDate.setDate(minDate.getDate() - daysAgo);
+
     const result = await db.all(
         `SELECT count, date
     FROM aggregatedVisits
-    WHERE application = ? AND datetime(date) > datetime(?)
+    WHERE application = ? AND datetime(date) >= datetime(?)
     ORDER BY datetime(date) ASC`,
-        [application, after]
+        [application, getDateString(minDate)]
     );
 
     return result.map(row => {

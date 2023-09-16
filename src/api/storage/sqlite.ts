@@ -40,3 +40,15 @@ await db.run(`
 `);
 
 console.log('Database is ready!');
+
+const aggregationRows = await db.all(`SELECT id, date FROM aggregatedVisits`);
+console.log('Fixing', aggregationRows.length, 'rows');
+for (const row of aggregationRows) {
+    const id = row['id'] as number;
+    const date = row['date'] as string;
+    if (id == null || !date) {
+        continue;
+    }
+    const newDate = date.endsWith('Z') ? date : date + 'Z';
+    await db.run(`UPDATE aggregatedVisits SET date = ? WHERE id = ?`, [newDate.replace(' ', 'T'), id]);
+}

@@ -1,14 +1,13 @@
-import { RouteBuilder } from '../models/routes.js';
 import Router from '@koa/router';
-import { attachRouter } from '../util/koa.js';
 import {
     addNewApplicationAsync,
     addNewVisitAsync,
     applications,
-    getAggregatedVisitsAsync, getVisitsAsync, performAggregationAsync
+    getAggregatedVisitsAsync,
+    getVisitsAsync,
+    performAggregationAsync
 } from '../api/storage/database.js';
 import Koa, { Context } from 'koa';
-import { getDateString } from '../util/date.js';
 import { isUniqueConstraintViolation } from '../util/sql.js';
 
 const requireApplicationName = (ctx: Context) => {
@@ -27,20 +26,25 @@ const requireExistingApplicationName = (ctx: Context) => {
     return name;
 };
 
-const afterRegex = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+const maxDaysAgo = 35;
 
-const requireAfterDate = (ctx: Context) => {
-    const after = ctx.query.after;
+const requireDaysAgo = (ctx: Context) => {
+    const daysAgoString = ctx.query.days;
 
-    if (!after) {
-        return ctx.throw(400, 'Missing after date');
+    if (!daysAgoString || typeof daysAgoString !== 'string') {
+        return ctx.throw(400, 'Invalid/missing days ago');
     }
 
-    if (typeof after !== 'string' || !afterRegex.test(after)) {
-        return ctx.throw(400, 'Invalid after date');
+    const daysAgo = Number(daysAgoString);
+    if (Number.isNaN(daysAgo)) {
+        return ctx.throw(400, 'Days ago is not a number');
     }
 
-    return after;
+    if (daysAgo > maxDaysAgo) {
+        return ctx.throw(400, 'Days ago is too large');
+    }
+
+    return daysAgo;
 }
 
 export const registerApiRoutes = (app: Koa) => {
@@ -88,8 +92,8 @@ export const registerApiRoutes = (app: Koa) => {
 
     router.get('/applications/:name/visits', async ctx => {
         const applicationName = requireExistingApplicationName(ctx);
-        const afterDate = requireAfterDate(ctx);
-        ctx.body = await getAggregatedVisitsAsync(applicationName, afterDate);
+        const daysAgo = requireDaysAgo(ctx);
+        ctx.body = await getAggregatedVisitsAsync(applicationName, daysAgo);
     });
 
     router.get('/applications/:name/visits/now', async ctx => {
