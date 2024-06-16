@@ -1,126 +1,133 @@
-import { db } from './sqlite.js';
 import { isDuckType } from '@arcticzeroo/typeguard';
-import { IAggregatedVisits, IApplication } from '../../models/analytics.js';
+import { IAggregatedVisits } from '../../models/analytics.js';
 import { getDateString, normalizeDate } from '../../util/date.js';
+import { usePrismaClient } from './client.js';
 
 export const getApplicationsAsync = async () => {
-    const rows = await db.all('SELECT name FROM application');
-
-    return new Set(rows.map(row => {
-        if (!isDuckType<IApplication>(row, {
-            name: 'string'
-        })) {
-            throw new Error('Invalid row');
-        }
-
-        return row.name;
-    }));
+	return usePrismaClient(async client => {
+		const applications = await client.application.findMany({});
+		return new Set(applications.map(application => application.name));
+	});
 }
 
 export const applications = await getApplicationsAsync();
 
 export const addNewApplicationAsync = async (name: string) => {
-    if (applications.has(name)) {
-        return;
-    }
+	if (applications.has(name)) {
+		return;
+	}
 
-    const result = await db.run('INSERT INTO application (name) VALUES (?)', [name]);
-    if (result.changes !== 1) {
-        throw new Error('Failed to insert application');
-    }
+	await usePrismaClient(
+		client => client.application.create({
+			data: {
+				name
+			}
+		})
+	);
 
-    applications.add(name);
+	applications.add(name);
 };
 
-export const addNewVisitAsync = async (application: string, userId: string) => {
-    const result = await db.run('INSERT INTO visit (application, userId) VALUES (?, ?)', [application, userId]);
-    if (result.changes !== 1) {
-        throw new Error('Failed to insert visit');
-    }
+export const addNewVisitAsync = async (applicationName: string, userId: string) => {
+	return usePrismaClient(
+		client => client.visit.create({
+			data: {
+				applicationName,
+				userId
+			}
+		})
+	);
 }
 
-const getVisitsQuery = await db.prepare(
-    `SELECT COUNT(*) AS count
-         FROM visit
-         WHERE application = ?`
-);
-
-export const getVisitsAsync = async (application: string) => {
-    const result = await getVisitsQuery.get([application]);
-    return (result['count'] as number | undefined) ?? 0;
+export const getVisitsAsync = async (applicationName: string) => {
+	return usePrismaClient(
+		client => client.visit.count({
+			where: {
+				applicationName
+			}
+		})
+	);
 }
 
-export const clearVisitsAsync = async (application: string) => {
-    await db.run(
-        `DELETE FROM visit WHERE application = ?`,
-        [application]
-    );
+export const clearVisitsAsync = async (applicationName: string) => {
+	return usePrismaClient(
+		client => client.visit.deleteMany({
+			where: {
+				applicationName
+			}
+		})
+	);
 }
 
-export const addAggregatedVisitsAsync = async (application: string, count: number, date: Date) => {
-    const result = await db.run(
-        `INSERT INTO aggregatedVisits (application, count, date) VALUES (?, ?, ?)`,
-        [application, count, getDateString(date)]
-    );
-
-    if (result.changes !== 1) {
-        throw new Error('Failed to insert aggregated visits');
-    }
+export const addAggregatedVisitsAsync = async (applicationName: string, count: number, date: Date) => {
+	return usePrismaClient(
+		client => client.aggregatedVisits.create({
+			data: {
+				applicationName,
+				count,
+				date: getDateString(date)
+			}
+		})
+	);
 }
 
 export const getAggregatedVisitsAsync = async (application: string, daysAgo: number): Promise<Array<IAggregatedVisits>> => {
-    const minDate = normalizeDate(new Date());
-    minDate.setDate(minDate.getDate() - daysAgo);
+	const minDate = normalizeDate(new Date());
+	minDate.setDate(minDate.getDate() - daysAgo);
 
-    const result = await db.all(
-        `SELECT count, date
-    FROM aggregatedVisits
-    WHERE application = ? AND datetime(date) >= datetime(?)
-    ORDER BY datetime(date) ASC`,
-        [application, getDateString(minDate)]
-    );
+	const result = await usePrismaClient(
+		client => client.$queryRaw`
+		SELECT count, date
+		FROM aggregatedVisits
+		WHERE application = ${application} AND datetime(date) >= datetime(${getDateString(minDate)})
+		ORDER BY datetime(date) ASC`
+	);
 
-    return result.map(row => {
-        if (!isDuckType<IAggregatedVisits>(row, {
-            count: 'number',
-            date:  'string'
-        })) {
-            throw new Error('Invalid row');
-        }
+	if (!Array.isArray(result)) {
+		throw new Error('Invalid result from prisma');
+	}
 
-        return {
-            count: row.count,
-            date:  row.date
-        };
-    });
+	return result.map(row => {
+		if (!isDuckType<IAggregatedVisits>(row, {
+			count: 'number',
+			date:  'string'
+		})) {
+			throw new Error('Invalid row');
+		}
+
+		return {
+			count: row.count,
+			date:  row.date
+		};
+	});
 }
 
 export const performAggregationAsync = async (application: string, time: Date) => {
-    // TODO: Use a transaction here
-    const count = await getVisitsAsync(application);
-    if (count === 0) {
-        return;
-    }
-    await addAggregatedVisitsAsync(application, count, time);
-    await clearVisitsAsync(application);
+	// TODO: Use a transaction here
+	const count = await getVisitsAsync(application);
+	if (count === 0) {
+		return;
+	}
+	await addAggregatedVisitsAsync(application, count, time);
+	await clearVisitsAsync(application);
 }
 
 export const performHourlyAggregationAsync = async () => {
-    const nearestHour = new Date();
-    nearestHour.setHours(nearestHour.getHours() - 1);
-    nearestHour.setMinutes(0);
+	const nearestHour = new Date();
+	nearestHour.setHours(nearestHour.getHours() - 1);
+	nearestHour.setMinutes(0);
 
-    console.log(`Aggregating for time: ${getDateString(nearestHour)}`);
+	console.log(`Aggregating for time: ${getDateString(nearestHour)}`);
 
-    if (applications.size === 0) {
-        console.log('No applications to aggregate');
-        return;
-    }
+	if (applications.size === 0) {
+		console.log('No applications to aggregate');
+		return;
+	}
 
-    for (const application of applications) {
-        console.log('Aggregating for application: ', application);
-        await performAggregationAsync(application, nearestHour);
-    }
+	for (const application of applications) {
+		console.log('Aggregating for application: ', application);
+		await performAggregationAsync(application, nearestHour);
+	}
 
-    console.log('Aggregation complete!');
+	console.log('Aggregation complete!');
 };

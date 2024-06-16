@@ -1,0 +1,36 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model AggregatedVisits {
+  id              Int         @id @default(autoincrement())
+  applicationName String      @map("application")
+  count           Int
+  date            String
+  application     Application @relation(fields: [applicationName], references: [name], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("aggregatedVisits")
+}
+
+model Application {
+  name             String             @id
+  isAnonymous      Boolean            @default(false)
+  Visit            Visit[]
+  AggregatedVisits AggregatedVisits[]
+
+  @@map("application")
+}
+
+model Visit {
+  id              Int         @id @default(autoincrement())
+  userId          String      @unique(map: "sqlite_autoindex_visit_1")
+  applicationName String      @map("application")
+  application     Application @relation(fields: [applicationName], references: [name], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("visit")
+}
