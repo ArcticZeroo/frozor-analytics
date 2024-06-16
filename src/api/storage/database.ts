@@ -1,5 +1,5 @@
 import { isDuckType } from '@arcticzeroo/typeguard';
-import { IAggregatedVisits } from '../../models/analytics.js';
+import { IAggregatedVisit } from '../../models/analytics.js';
 import { getDateString, normalizeDate } from '../../util/date.js';
 import { usePrismaClient } from './client.js';
 
@@ -30,26 +30,55 @@ export const addNewApplicationAsync = async (name: string) => {
 
 export const addNewVisitAsync = async (applicationName: string, userId: string) => {
 	return usePrismaClient(
-		client => client.visit.create({
-			data: {
-				applicationName,
-				userId
+		async client => client.visit.upsert(
+			{
+				where:  {
+					userId_applicationName: {
+						applicationName,
+						userId
+					}
+				},
+				update: {
+					count: {
+						increment: 1
+					}
+				},
+				create: {
+					applicationName,
+					userId,
+					count: 1
+				}
 			}
-		})
+		)
 	);
 }
 
 export const getVisitsAsync = async (applicationName: string) => {
-	return usePrismaClient(
-		client => client.visit.count({
-			where: {
+	const result = await usePrismaClient(
+		client => client.visit.aggregate({
+			where:  {
 				applicationName
+			},
+			_count: true,
+			_sum:   {
+				count: true
 			}
 		})
 	);
+
+	return {
+		uniqueUserCount: result._count,
+		totalCount:      result._sum.count || 0
+	};
 }
 
-export const clearVisitsAsync = async (applicationName: string) => {
+export const clearAllVisitsAsync = () => {
+	return usePrismaClient(
+		client => client.visit.deleteMany({})
+	);
+}
+
+const clearVisitsAsync = async (applicationName: string) => {
 	return usePrismaClient(
 		client => client.visit.deleteMany({
 			where: {
@@ -59,25 +88,38 @@ export const clearVisitsAsync = async (applicationName: string) => {
 	);
 }
 
-export const addAggregatedVisitsAsync = async (applicationName: string, count: number, date: Date) => {
+interface IAggregatedVisitsParams {
+	applicationName: string;
+	uniqueUserCount: number;
+	totalCount: number;
+	date: Date;
+}
+
+const addAggregatedVisitsAsync = async ({
+											applicationName,
+											uniqueUserCount,
+											totalCount,
+											date
+										}: IAggregatedVisitsParams) => {
 	return usePrismaClient(
 		client => client.aggregatedVisits.create({
 			data: {
 				applicationName,
-				count,
+				uniqueUserCount,
+				totalCount,
 				date: getDateString(date)
 			}
 		})
 	);
 }
 
-export const getAggregatedVisitsAsync = async (application: string, daysAgo: number): Promise<Array<IAggregatedVisits>> => {
+export const getAggregatedVisitsAsync = async (application: string, daysAgo: number): Promise<Array<IAggregatedVisit>> => {
 	const minDate = normalizeDate(new Date());
 	minDate.setDate(minDate.getDate() - daysAgo);
 
 	const result = await usePrismaClient(
 		client => client.$queryRaw`
-		SELECT count, date
+		SELECT count, totalCount, date
 		FROM aggregatedVisits
 		WHERE application = ${application} AND datetime(date) >= datetime(${getDateString(minDate)})
 		ORDER BY datetime(date) ASC`
@@ -88,28 +130,39 @@ export const getAggregatedVisitsAsync = async (application: string, daysAgo: num
 	}
 
 	return result.map(row => {
-		if (!isDuckType<IAggregatedVisits>(row, {
-			count: 'number',
-			date:  'string'
+		if (!isDuckType<IAggregatedVisit>(row, {
+			count:      'number',
+			totalCount: 'number',
+			date:       'string'
 		})) {
 			throw new Error('Invalid row');
 		}
 
 		return {
-			count: row.count,
-			date:  row.date
+			count:      row.count,
+			totalCount: row.totalCount,
+			date:       row.date
 		};
 	});
 }
 
-export const performAggregationAsync = async (application: string, time: Date) => {
+export const performAggregationAsync = async (applicationName: string, time: Date) => {
 	// TODO: Use a transaction here
-	const count = await getVisitsAsync(application);
-	if (count === 0) {
+	// also TODO: Use prisma client and pass it into these methods
+	const visitData = await getVisitsAsync(applicationName);
+
+	if (visitData.totalCount === 0 && visitData.uniqueUserCount === 0) {
 		return;
 	}
-	await addAggregatedVisitsAsync(application, count, time);
-	await clearVisitsAsync(application);
+
+	await addAggregatedVisitsAsync({
+		applicationName,
+		uniqueUserCount: visitData.uniqueUserCount,
+		totalCount:      visitData.totalCount,
+		date:            time
+	});
+
+	await clearVisitsAsync(applicationName);
 }
 
 export const performHourlyAggregationAsync = async () => {

@@ -2,7 +2,9 @@ export interface IApplication {
     name: string;
 }
 
-export interface IAggregatedVisits {
+export interface IAggregatedVisit {
+    // unique user count
     count: number;
+    totalCount: number;
     date: string;
 }

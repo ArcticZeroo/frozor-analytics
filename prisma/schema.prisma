@@ -10,16 +10,16 @@ datasource db {
 model AggregatedVisits {
   id              Int         @id @default(autoincrement())
   applicationName String      @map("application")
-  count           Int
+  uniqueUserCount Int         @map("count")
+  totalCount      Int         @default(0)
   date            String
-  application     Application @relation(fields: [applicationName], references: [name], onDelete: NoAction, onUpdate: NoAction)
+  application     Application @relation(fields: [applicationName], references: [name], onDelete: Cascade, onUpdate: Cascade)
 
   @@map("aggregatedVisits")
 }
 
 model Application {
   name             String             @id
-  isAnonymous      Boolean            @default(false)
   Visit            Visit[]
   AggregatedVisits AggregatedVisits[]
 
@@ -27,10 +27,11 @@ model Application {
 }
 
 model Visit {
-  id              Int         @id @default(autoincrement())
-  userId          String      @unique(map: "sqlite_autoindex_visit_1")
+  userId          String
   applicationName String      @map("application")
-  application     Application @relation(fields: [applicationName], references: [name], onDelete: NoAction, onUpdate: NoAction)
+  application     Application @relation(fields: [applicationName], references: [name], onDelete: Cascade, onUpdate: Cascade)
+  count           Int         @default(1)
 
+  @@id([userId, applicationName])
   @@map("visit")
 }
